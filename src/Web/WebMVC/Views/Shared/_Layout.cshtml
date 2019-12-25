@@ -122,6 +122,11 @@
                     refreshOrderList();
                 }
             });
+
+            connection.on("UpdateBasketCount", (message) => {
+                //refresh the page for the latest count to get shown
+                     refreshPage();
+            });
         }
 
         function getToken() {
@@ -129,7 +134,11 @@
         }
 
         function refreshOrderList() {
-            clearTimeout(timerId);
+            refreshPage();
+        }
+
+        function refreshPage() {
+             clearTimeout(timerId);
             timerId = setTimeout(function () {
                 window.location.reload();
             }, 1000);

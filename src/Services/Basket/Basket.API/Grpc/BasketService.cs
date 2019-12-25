@@ -4,7 +4,11 @@ using Microsoft.eShopOnContainers.Services.Basket.API.Model;
 using Microsoft.Extensions.Logging;
 using System.Linq;
 using System.Threading.Tasks;
-using GrpcBasket;
+using Basket.API.IntegrationEvents.Events;
+using System;
+using Microsoft.eShopOnContainers.Services.Basket.API.Services;
+using Microsoft.eShopOnContainers.BuildingBlocks.EventBus.Abstractions;
+using Microsoft.eShopOnContainers.Services.Basket.API;
 
 namespace GrpcBasket
 {
@@ -12,11 +16,17 @@ namespace GrpcBasket
     {
         private readonly IBasketRepository _repository;
         private readonly ILogger<BasketService> _logger;
+        private readonly IIdentityService _identityService;
+        private readonly IEventBus _eventBus;
 
-        public BasketService(IBasketRepository repository, ILogger<BasketService> logger)
+        public BasketService(IBasketRepository repository, ILogger<BasketService> logger,
+            IIdentityService identityService,
+            IEventBus eventBus)
         {
             _repository = repository;
             _logger = logger;
+            _identityService = identityService;
+            _eventBus = eventBus;
         }
 
         [AllowAnonymous]
@@ -47,6 +57,21 @@ namespace GrpcBasket
             var customerBasket = MapToCustomerBasket(request);
 
             var response = await _repository.UpdateBasketAsync(customerBasket);
+
+            var buyerName = _identityService.GetUserName();
+            var integrationEvent = new UserAddedCatalogItemToBasketIntegrationEvent(buyerName, request.Items.Count);
+            try
+            {
+                _logger.LogInformation("----- Publishing integration event: {IntegrationEventId} from {AppName} - ({@IntegrationEvent})", integrationEvent.Id, Program.AppName, integrationEvent);
+
+                _eventBus.Publish(integrationEvent);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ERROR Publishing integration event: {IntegrationEventId} from {AppName}", integrationEvent.Id, Program.AppName);
+
+                throw;
+            }
 
             if (response != null)
             {
